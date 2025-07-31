@@ -15,7 +15,7 @@ namespace Afterimage
         readonly private IGraphicsDevicesAndContext devices;
         readonly AfterimageEffect item;
 
-        private readonly Queue<(ID2D1Bitmap1 Image, int Frame, Vector2 DrawPoint )> frameHistory = new();
+        private readonly Queue<(ID2D1Bitmap1 Image, int Frame, Vector2 DrawPoint, float RotationZ )> frameHistory = new();
 
         public ID2D1Image Output { get; }
 
@@ -68,9 +68,12 @@ namespace Afterimage
             dc.Target = commandList;
             dc.BeginDraw();
 
+            var currentCenterOffset = new Vector2(processedSize.Width / 2f, processedSize.Height / 2f);
+            dc.Transform = Matrix3x2.CreateTranslation(-currentCenterOffset);
             dc.DrawImage(processedInput);
+            dc.Transform = Matrix3x2.Identity;
 
-            foreach (var (historyImage, historyTime, historyDrawPoint) in frameHistory)
+            foreach (var (historyImage, historyTime, historyDrawPoint, historyRotationZ) in frameHistory)
             {
                 var timeDiff = (float)(frame - historyTime);
                 var effectOpacity = item.Opacity.GetValue(frame, length, fps);
@@ -89,12 +92,25 @@ namespace Afterimage
                 float opacity = decayFactor * ((float)effectOpacity / 100f);
                 if (opacity <= 0.01f) continue;
 
-                
-                var relativePos = historyDrawPoint - currentDrawPoint ;
-                var inverseRotationMatrix = Matrix3x2.CreateRotation(-currentRotation * (float)(Math.PI /180));
+                var relativePos = historyDrawPoint - currentDrawPoint;
+                var inverseRotationMatrix = Matrix3x2.CreateRotation(-currentRotation * (float)(Math.PI / 180));
                 var localRelativePos = Vector2.Transform(relativePos, inverseRotationMatrix);
 
-                dc.Transform = Matrix3x2.CreateTranslation(localRelativePos);
+                // 2. 残像の「回転」と「配置」を行うための変換行列を計算
+                var historySize = historyImage.Size;
+                // 2-1. 残像の中心を原点に移動
+                var toOriginMatrix = Matrix3x2.CreateTranslation(-historySize.Width / 2f, -historySize.Height / 2f);
+
+                // 2-2. 残像を回転（現在の回転量からの差分だけ回転させる）
+                var relativeRotation = historyRotationZ - currentRotation;
+                var rotationMatrix = Matrix3x2.CreateRotation(relativeRotation * (float)(Math.PI / 180));
+
+                // 2-3. 計算済みの相対位置へ移動
+                var translationMatrix = Matrix3x2.CreateTranslation(localRelativePos);
+
+                // 3. すべての変換を結合して適用
+                // (実行順序: 中心を原点へ -> 回転 -> 最終位置へ移動)
+                dc.Transform = toOriginMatrix * rotationMatrix * translationMatrix;
                 dc.DrawBitmap(historyImage, opacity, BitmapInterpolationMode.Linear);
                 dc.Transform = Matrix3x2.Identity;
             }
@@ -118,7 +134,7 @@ namespace Afterimage
                 {
                     while (frameHistory.Count > 0)
                     {
-                        var (Image, _, _) = frameHistory.Dequeue();
+                        var (Image, _, _, _) = frameHistory.Dequeue();
                         Image.Dispose();
                     }
                 }
@@ -128,7 +144,7 @@ namespace Afterimage
             var frameCount = item.FrameCount.GetValue(frame, length, fps);
             while (frameHistory.Count >= frameCount)
             {
-                var (Image, _,_) = frameHistory.Dequeue();
+                var (Image, _,_, _) = frameHistory.Dequeue();
                 Image.Dispose();
             }
 
@@ -150,7 +166,7 @@ namespace Afterimage
                 dc.DrawImage(processedInput);
                 dc.EndDraw();
                 dc.Target = null;
-                frameHistory.Enqueue((frameCopy, frame, currentDrawPoint));
+                frameHistory.Enqueue((frameCopy, frame, currentDrawPoint, currentRotation));
             }
 
             return effectDescription.DrawDescription;
@@ -169,7 +185,7 @@ namespace Afterimage
         {
             while (frameHistory.Count > 0)
             {
-                var (Image, _, _) = frameHistory.Dequeue();
+                var (Image, _, _, _) = frameHistory.Dequeue();
                 Image.Dispose();
             }
 
