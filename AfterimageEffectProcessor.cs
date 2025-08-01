@@ -143,9 +143,13 @@ namespace Afterimage
             }
 
             // 現在のフレームをコピーして履歴に追加
-            var inputSize = new System.Drawing.Size(
-                (int)(inputBounds.Right - inputBounds.Left),
-                (int)(inputBounds.Bottom - inputBounds.Top));
+            var width = (int)Math.Ceiling(inputBounds.Right - inputBounds.Left);
+            var height = (int)Math.Ceiling(inputBounds.Bottom - inputBounds.Top);
+            const int maxTextureDimension = 16384;
+            width = Math.Min(width, maxTextureDimension);
+            height = Math.Min(height, maxTextureDimension);
+
+            var inputSize = new System.Drawing.Size(width, height);
 
             if (inputSize.Width > 0 && inputSize.Height > 0)
             {
