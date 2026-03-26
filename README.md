@@ -1,5 +1,8 @@
 # 「残像」プラグイン
 
+> [!Note]
+> このプラグインはゆっくりMovieMaker v4.49.0.0より「残像」エフェクトが使用可能となったため、更新を終了いたしました。
+
 ### [最新バージョンをダウンロード](https://github.com/Dolphin-kun/Afterimage/releases/latest)
 
 ## 概要
